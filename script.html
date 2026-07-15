@@ -1,0 +1,438 @@
+<script>
+  let initialData = null;
+
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+      initializeDashboard();
+    }
+  );
+
+
+  function initializeDashboard() {
+    setLoading(true);
+    hideError();
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        initialData = data;
+
+        createStoreOptions(data.stores);
+        createYearOptions(data.year);
+        createMonthOptions(data.month);
+
+        loadDashboard();
+      })
+      .withFailureHandler(handleFailure)
+      .getInitialData();
+  }
+
+
+  function createStoreOptions(stores) {
+    const select = document.getElementById(
+      "storeSelect"
+    );
+
+    stores.forEach(function(store) {
+      const option = document.createElement(
+        "option"
+      );
+
+      option.value = store.key;
+      option.textContent = store.name;
+
+      select.appendChild(option);
+    });
+  }
+
+
+  function createYearOptions(currentYear) {
+    const select = document.getElementById(
+      "yearSelect"
+    );
+
+    select.innerHTML = "";
+
+    for (
+      let year = currentYear - 2;
+      year <= currentYear + 1;
+      year++
+    ) {
+      const option = document.createElement(
+        "option"
+      );
+
+      option.value = year;
+      option.textContent = year + "년";
+
+      if (year === currentYear) {
+        option.selected = true;
+      }
+
+      select.appendChild(option);
+    }
+  }
+
+
+  function createMonthOptions(currentMonth) {
+    const select = document.getElementById(
+      "monthSelect"
+    );
+
+    select.innerHTML = "";
+
+    for (let month = 1; month <= 12; month++) {
+      const option = document.createElement(
+        "option"
+      );
+
+      option.value = month;
+      option.textContent = month + "월";
+
+      if (month === currentMonth) {
+        option.selected = true;
+      }
+
+      select.appendChild(option);
+    }
+  }
+
+
+  function loadDashboard() {
+    const storeKey =
+      document.getElementById("storeSelect").value;
+
+    const year =
+      Number(
+        document.getElementById("yearSelect").value
+      );
+
+    const month =
+      Number(
+        document.getElementById("monthSelect").value
+      );
+
+    setLoading(true);
+    hideError();
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderDashboard(data);
+        setLoading(false);
+      })
+      .withFailureHandler(handleFailure)
+      .getDashboardData(
+        storeKey,
+        year,
+        month
+      );
+  }
+
+
+  function renderDashboard(data) {
+    renderSummary(data.summary);
+
+    if (data.mode === "all") {
+      renderAllStores(data);
+      return;
+    }
+
+    renderSingleStore(data);
+  }
+
+
+  function renderSummary(summary) {
+    setText(
+      "totalSales",
+      formatMoney(summary.totalSales)
+    );
+
+    setText(
+      "totalPurchases",
+      formatMoney(summary.totalPurchases)
+    );
+
+    setText(
+      "costRate",
+      formatPercent(summary.costRate)
+    );
+
+    setText(
+      "averageSales",
+      formatMoney(summary.averageSales)
+    );
+  }
+
+
+  function renderAllStores(data) {
+    showElement("storeSection");
+    hideElement("dailySection");
+    hideElement("vendorSection");
+
+    const grid = document.getElementById(
+      "storeGrid"
+    );
+
+    if (!data.stores.length) {
+      grid.innerHTML =
+        '<div class="empty-message">' +
+        "조회된 지점 정보가 없습니다." +
+        "</div>";
+
+      return;
+    }
+
+    grid.innerHTML = data.stores
+      .map(function(store) {
+        if (store.error) {
+          return `
+            <article class="store-card has-error">
+              <h3>${escapeHtml(store.shortName)}</h3>
+
+              <p class="store-error">
+                ${escapeHtml(store.error)}
+              </p>
+            </article>
+          `;
+        }
+
+        return `
+          <article class="store-card">
+
+            <h3>${escapeHtml(store.shortName)}</h3>
+
+            <div class="store-metric">
+              <span>매출 누계</span>
+              <strong>
+                ${formatMoney(store.totalSales)}
+              </strong>
+            </div>
+
+            <div class="store-metric">
+              <span>매입 누계</span>
+              <strong>
+                ${formatMoney(store.totalPurchases)}
+              </strong>
+            </div>
+
+            <div class="store-metric">
+              <span>원가율</span>
+              <strong>
+                ${formatPercent(store.costRate)}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              class="store-detail-button"
+              onclick="openStoreDetail('${store.key}')">
+              상세보기
+            </button>
+
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+
+  function renderSingleStore(data) {
+    hideElement("storeSection");
+    showElement("dailySection");
+    showElement("vendorSection");
+
+    setText(
+      "dailyTitle",
+      data.storeName +
+      " · " +
+      data.year +
+      "년 " +
+      data.month +
+      "월"
+    );
+
+    renderDailyTable(data.daily);
+    renderVendors(data.vendors);
+  }
+
+
+  function renderDailyTable(rows) {
+    const tbody = document.getElementById(
+      "dailyBody"
+    );
+
+    if (!rows.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td
+            colspan="4"
+            class="empty-message">
+            해당 월의 매출·매입 자료가 없습니다.
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map(function(row) {
+        return `
+          <tr>
+            <td>${escapeHtml(row.dateLabel)}</td>
+            <td>${formatMoney(row.sales)}</td>
+            <td>${formatMoney(row.purchases)}</td>
+            <td>${formatPercent(row.costRate)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
+
+  function renderVendors(vendors) {
+    const grid = document.getElementById(
+      "vendorGrid"
+    );
+
+    if (!vendors.length) {
+      grid.innerHTML = `
+        <div class="empty-message">
+          해당 월의 거래처 매입 자료가 없습니다.
+        </div>
+      `;
+
+      return;
+    }
+
+    grid.innerHTML = vendors
+      .map(function(vendor) {
+        return `
+          <article class="vendor-item">
+            <span>${escapeHtml(vendor.name)}</span>
+
+            <strong>
+              ${formatMoney(vendor.amount)}
+            </strong>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+
+  function openStoreDetail(storeKey) {
+    document.getElementById(
+      "storeSelect"
+    ).value = storeKey;
+
+    loadDashboard();
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+  }
+
+
+  function formatMoney(value) {
+    const number = Number(value || 0);
+
+    return new Intl.NumberFormat(
+      "ko-KR"
+    ).format(number) + "원";
+  }
+
+
+  function formatPercent(value) {
+    return Number(value || 0).toFixed(1) + "%";
+  }
+
+
+  function setText(id, text) {
+    const element = document.getElementById(id);
+
+    if (element) {
+      element.textContent = text;
+    }
+  }
+
+
+  function showElement(id) {
+    const element = document.getElementById(id);
+
+    if (element) {
+      element.classList.remove("hidden");
+    }
+  }
+
+
+  function hideElement(id) {
+    const element = document.getElementById(id);
+
+    if (element) {
+      element.classList.add("hidden");
+    }
+  }
+
+
+  function setLoading(isLoading) {
+    const loadingBox = document.getElementById(
+      "loadingBox"
+    );
+
+    const content = document.getElementById(
+      "dashboardContent"
+    );
+
+    if (isLoading) {
+      loadingBox.classList.remove("hidden");
+      content.style.opacity = "0.45";
+      content.style.pointerEvents = "none";
+    } else {
+      loadingBox.classList.add("hidden");
+      content.style.opacity = "1";
+      content.style.pointerEvents = "";
+    }
+  }
+
+
+  function handleFailure(error) {
+    setLoading(false);
+
+    const message =
+      error && error.message
+        ? error.message
+        : String(error || "알 수 없는 오류");
+
+    const box = document.getElementById(
+      "errorBox"
+    );
+
+    box.textContent =
+      "조회 오류: " + message;
+
+    box.classList.remove("hidden");
+  }
+
+
+  function hideError() {
+    const box = document.getElementById(
+      "errorBox"
+    );
+
+    box.textContent = "";
+    box.classList.add("hidden");
+  }
+
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+</script>

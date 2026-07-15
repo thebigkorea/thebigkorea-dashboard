@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0">
+
+  <base target="_top">
+
+  <title>더큰코리아 경영대시보드</title>
+
+  <?!= include("style"); ?>
+</head>
+
+<body>
+
+  <div class="app-shell">
+
+    <header class="hero">
+
+      <div>
+        <p class="eyebrow">THEBIG KOREA</p>
+
+        <h1>더큰코리아 경영대시보드</h1>
+
+        <p class="hero-description">
+          지점별 매출·매입·원가율을 한 화면에서 확인합니다.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="refresh-button"
+        onclick="loadDashboard()">
+        새로고침
+      </button>
+
+    </header>
+
+
+    <section class="filter-panel">
+
+      <div class="filter-field">
+        <label for="storeSelect">지점</label>
+
+        <select id="storeSelect">
+          <option value="all">전체 지점</option>
+        </select>
+      </div>
+
+
+      <div class="filter-field">
+        <label for="yearSelect">연도</label>
+
+        <select id="yearSelect"></select>
+      </div>
+
+
+      <div class="filter-field">
+        <label for="monthSelect">월</label>
+
+        <select id="monthSelect"></select>
+      </div>
+
+
+      <button
+        type="button"
+        class="primary-button"
+        onclick="loadDashboard()">
+        조회
+      </button>
+
+    </section>
+
+
+    <div
+      id="loadingBox"
+      class="loading-box hidden">
+      데이터를 불러오는 중입니다.
+    </div>
+
+
+    <div
+      id="errorBox"
+      class="error-box hidden">
+    </div>
+
+
+    <main id="dashboardContent">
+
+      <section class="summary-grid">
+
+        <article class="summary-card">
+          <span class="summary-label">매출 누계</span>
+          <strong id="totalSales">0원</strong>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-label">매입 누계</span>
+          <strong id="totalPurchases">0원</strong>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-label">원가율</span>
+          <strong id="costRate">0%</strong>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-label">일평균 매출</span>
+          <strong id="averageSales">0원</strong>
+        </article>
+
+      </section>
+
+
+      <section
+        id="storeSection"
+        class="content-card">
+
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">STORE SUMMARY</span>
+            <h2>지점별 영업현황</h2>
+          </div>
+        </div>
+
+        <div
+          id="storeGrid"
+          class="store-grid">
+        </div>
+
+      </section>
+
+
+      <section
+        id="dailySection"
+        class="content-card hidden">
+
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">DAILY REPORT</span>
+            <h2 id="dailyTitle">일별 매출·매입 현황</h2>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+
+          <table>
+
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>매출</th>
+                <th>매입</th>
+                <th>원가율</th>
+              </tr>
+            </thead>
+
+            <tbody id="dailyBody">
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+
+
+      <section
+        id="vendorSection"
+        class="content-card hidden">
+
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">PURCHASE VENDORS</span>
+            <h2>거래처별 매입현황</h2>
+          </div>
+        </div>
+
+        <div
+          id="vendorGrid"
+          class="vendor-grid">
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <?!= include("script"); ?>
+
+</body>
+</html>

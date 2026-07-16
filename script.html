@@ -99,35 +99,50 @@
   }
 
 
-  function loadDashboard() {
-    const storeKey =
-      document.getElementById("storeSelect").value;
+  function loadDashboard(forceRefresh) {
+  const storeKey =
+    document.getElementById("storeSelect").value;
 
-    const year =
-      Number(
-        document.getElementById("yearSelect").value
-      );
+  const year = Number(
+    document.getElementById("yearSelect").value
+  );
 
-    const month =
-      Number(
-        document.getElementById("monthSelect").value
-      );
+  const month = Number(
+    document.getElementById("monthSelect").value
+  );
 
-    setLoading(true);
-    hideError();
+  const refresh = forceRefresh === true;
 
-    google.script.run
-      .withSuccessHandler(function(data) {
-        renderDashboard(data);
-        setLoading(false);
-      })
-      .withFailureHandler(handleFailure)
-      .getDashboardData(
-        storeKey,
-        year,
-        month
-      );
-  }
+  setLoading(true);
+  hideError();
+
+  const loadingBox =
+    document.getElementById("loadingBox");
+
+  loadingBox.textContent = refresh
+    ? "각 지점 원장에서 최신 데이터를 다시 불러오는 중입니다."
+    : "데이터를 불러오는 중입니다.";
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      renderDashboard(data);
+      setLoading(false);
+
+      loadingBox.textContent =
+        "데이터를 불러오는 중입니다.";
+    })
+    .withFailureHandler(handleFailure)
+    .getDashboardData(
+      storeKey,
+      year,
+      month,
+      refresh
+    );
+}
+
+function forceRefreshDashboard() {
+  loadDashboard(true);
+}
 
 
   function renderDashboard(data) {
@@ -143,26 +158,85 @@
 
 
   function renderSummary(summary) {
-    setText(
-      "totalSales",
-      formatMoney(summary.totalSales)
+  setText(
+    "totalSales",
+    formatMoney(summary.totalSales)
+  );
+
+  setText(
+    "totalPurchases",
+    formatMoney(summary.totalPurchases)
+  );
+
+  setText(
+    "costRate",
+    formatPercent(summary.costRate)
+  );
+
+  setText(
+    "averageSales",
+    formatMoney(summary.averageSales)
+  );
+
+  setText(
+    "previousYearSales",
+    formatMoney(summary.previousYearSales)
+  );
+
+  const rateElement =
+    document.getElementById("yearOnYearRate");
+
+  const differenceElement =
+    document.getElementById(
+      "yearOnYearDifference"
     );
 
-    setText(
-      "totalPurchases",
-      formatMoney(summary.totalPurchases)
+  const rate =
+    Number(summary.yearOnYearRate || 0);
+
+  const difference =
+    Number(summary.yearOnYearDifference || 0);
+
+  if (rateElement) {
+    rateElement.textContent =
+      formatChangeRate(rate);
+
+    rateElement.classList.remove(
+      "change-up",
+      "change-down",
+      "change-flat"
     );
 
-    setText(
-      "costRate",
-      formatPercent(summary.costRate)
-    );
-
-    setText(
-      "averageSales",
-      formatMoney(summary.averageSales)
+    rateElement.classList.add(
+      getChangeClass(rate)
     );
   }
+
+  if (differenceElement) {
+    differenceElement.textContent =
+      formatChangeMoney(difference);
+
+    differenceElement.classList.remove(
+      "change-up",
+      "change-down",
+      "change-flat"
+    );
+
+    differenceElement.classList.add(
+      getChangeClass(difference)
+    );
+  }
+
+  const endDay =
+    Number(summary.comparisonEndDay || 0);
+
+  setText(
+    "comparisonPeriod",
+    endDay > 0
+      ? "1일~" + endDay + "일 기준"
+      : "비교 자료 없음"
+  );
+}
 
 
   function renderAllStores(data) {
@@ -222,6 +296,22 @@
                 ${formatPercent(store.costRate)}
               </strong>
             </div>
+
+            <div class="store-metric">
+               <span>전년도 동기간</span>
+
+            <strong>
+              ${formatMoney(store.previousYearSales)}
+            </strong>
+           </div>
+
+           <div class="store-metric">
+             <span>전년 대비</span>
+
+             <strong class="${getChangeClass(store.yearOnYearRate)}">
+               ${formatChangeRate(store.yearOnYearRate)}
+             </strong>
+          </div>
 
             <button
               type="button"
@@ -348,6 +438,56 @@
   function formatPercent(value) {
     return Number(value || 0).toFixed(1) + "%";
   }
+
+  function formatChangeRate(value) {
+  const number = Number(value || 0);
+
+  if (number > 0) {
+    return "▲ " + number.toFixed(1) + "%";
+  }
+
+  if (number < 0) {
+    return "▼ " +
+      Math.abs(number).toFixed(1) +
+      "%";
+  }
+
+  return "― 0.0%";
+}
+
+
+function formatChangeMoney(value) {
+  const number = Number(value || 0);
+
+  if (number > 0) {
+    return "전년보다 " +
+      formatMoney(number) +
+      " 증가";
+  }
+
+  if (number < 0) {
+    return "전년보다 " +
+      formatMoney(Math.abs(number)) +
+      " 감소";
+  }
+
+  return "전년과 동일";
+}
+
+
+function getChangeClass(value) {
+  const number = Number(value || 0);
+
+  if (number > 0) {
+    return "change-up";
+  }
+
+  if (number < 0) {
+    return "change-down";
+  }
+
+  return "change-flat";
+}
 
 
   function setText(id, text) {

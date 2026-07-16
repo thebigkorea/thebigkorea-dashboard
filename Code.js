@@ -24,6 +24,7 @@ const STORE_CONFIG = {
   }
 };
 
+const DASHBOARD_CACHE_SECONDS = 600;
 
 function doGet() {
   return HtmlService
@@ -72,16 +73,27 @@ function getInitialData() {
 }
 
 
-function getDashboardData(storeKey, year, month) {
+function getDashboardData(
+  storeKey,
+  year,
+  month,
+  forceRefresh
+) {
   year = Number(year);
   month = Number(month);
+
+  const refresh = forceRefresh === true;
 
   if (!year || !month) {
     throw new Error("조회 연월이 올바르지 않습니다.");
   }
 
   if (storeKey === "all") {
-    return getAllStoreDashboard_(year, month);
+    return getAllStoreDashboard_(
+      year,
+      month,
+      refresh
+    );
   }
 
   const store = STORE_CONFIG[storeKey];
@@ -94,15 +106,21 @@ function getDashboardData(storeKey, year, month) {
     storeKey,
     store,
     year,
-    month
+    month,
+    refresh
   );
 }
 
 
-function getAllStoreDashboard_(year, month) {
+function getAllStoreDashboard_(
+  year,
+  month,
+  forceRefresh
+) {
   const storeList = [];
   let totalSales = 0;
   let totalPurchases = 0;
+  let totalPreviousYearSales = 0;
 
   Object.keys(STORE_CONFIG).forEach(function(storeKey) {
     const store = STORE_CONFIG[storeKey];
@@ -112,11 +130,14 @@ function getAllStoreDashboard_(year, month) {
         storeKey,
         store,
         year,
-        month
+        month,
+         forceRefresh
       );
 
       totalSales += result.summary.totalSales;
       totalPurchases += result.summary.totalPurchases;
+      totalPreviousYearSales +=
+        result.summary.previousYearSales || 0;
 
       storeList.push({
         key: storeKey,
@@ -128,6 +149,19 @@ function getAllStoreDashboard_(year, month) {
         averageSales: result.summary.averageSales,
         businessDays: result.summary.businessDays,
         todaySales: result.summary.todaySales,
+
+        previousYearSales:
+          result.summary.previousYearSales || 0,
+
+        yearOnYearDifference:
+          result.summary.yearOnYearDifference || 0,
+
+        yearOnYearRate:
+          result.summary.yearOnYearRate || 0,
+
+        comparisonEndDay:
+          result.summary.comparisonEndDay || 0,
+
         error: ""
       });
 
@@ -142,6 +176,12 @@ function getAllStoreDashboard_(year, month) {
         averageSales: 0,
         businessDays: 0,
         todaySales: 0,
+
+         previousYearSales: 0,
+         yearOnYearDifference: 0,
+         yearOnYearRate: 0,
+         comparisonEndDay: 0,
+
         error: error.message
       });
     }
@@ -157,6 +197,23 @@ function getAllStoreDashboard_(year, month) {
     summary: {
       totalSales: totalSales,
       totalPurchases: totalPurchases,
+
+      previousYearSales: totalPreviousYearSales,
+
+      yearOnYearDifference:
+       totalSales - totalPreviousYearSales,
+
+      yearOnYearRate:
+        totalPreviousYearSales > 0
+          ? roundNumber_(
+            (
+              (totalSales - totalPreviousYearSales) /
+               totalPreviousYearSales
+             ) * 100,
+            1
+            )
+            : 0,
+
       costRate: totalSales > 0
         ? roundNumber_((totalPurchases / totalSales) * 100, 1)
         : 0,
@@ -178,8 +235,29 @@ function getSingleStoreDashboard_(
   storeKey,
   store,
   year,
-  month
+  month,
+  forceRefresh
 ) {
+  const cache = CacheService.getScriptCache();
+
+  const cacheKey = buildDashboardCacheKey_(
+    storeKey,
+    year,
+    month
+  );
+
+  if (!forceRefresh) {
+    const cachedText = cache.get(cacheKey);
+
+    if (cachedText) {
+      try {
+        return JSON.parse(cachedText);
+      } catch (error) {
+        cache.remove(cacheKey);
+      }
+    }
+  }
+
   const spreadsheet = SpreadsheetApp.openById(
     store.spreadsheetId
   );
@@ -204,6 +282,16 @@ function getSingleStoreDashboard_(
     year,
     month
   );
+
+  const comparisonEndDay =
+  getLastSalesDay_(sales.rows);
+
+const previousSales = readSalesData_(
+  salesSheet,
+  year - 1,
+  month,
+  comparisonEndDay
+);
 
   const purchases = readPurchaseData_(
     purchaseSheet,
@@ -268,7 +356,7 @@ function getSingleStoreDashboard_(
 
   const todayItem = dailyMap[todayKey];
 
-  return {
+  const result = {
     mode: "single",
     storeKey: storeKey,
     storeName: store.name,
@@ -277,8 +365,26 @@ function getSingleStoreDashboard_(
     month: month,
 
     summary: {
-      totalSales: sales.total,
-      totalPurchases: purchases.total,
+  totalSales: sales.total,
+  totalPurchases: purchases.total,
+
+  previousYearSales: previousSales.total,
+
+  yearOnYearDifference:
+    sales.total - previousSales.total,
+
+  yearOnYearRate:
+    previousSales.total > 0
+      ? roundNumber_(
+          (
+            (sales.total - previousSales.total) /
+            previousSales.total
+          ) * 100,
+          1
+        )
+      : 0,
+
+  comparisonEndDay: comparisonEndDay,
 
       costRate: sales.total > 0
         ? roundNumber_(
@@ -288,7 +394,9 @@ function getSingleStoreDashboard_(
         : 0,
 
       averageSales: sales.businessDays > 0
-        ? Math.round(sales.total / sales.businessDays)
+        ? Math.round(
+            sales.total / sales.businessDays
+          )
         : 0,
 
       businessDays: sales.businessDays,
@@ -302,10 +410,29 @@ function getSingleStoreDashboard_(
     vendors: purchases.vendors,
     stores: []
   };
+
+  try {
+    cache.put(
+      cacheKey,
+      JSON.stringify(result),
+      DASHBOARD_CACHE_SECONDS
+    );
+  } catch (error) {
+    console.log(
+      "캐시 저장 실패: " + error.message
+    );
+  }
+
+  return result;
 }
 
 
-function readSalesData_(sheet, year, month) {
+function readSalesData_(
+  sheet,
+  year,
+  month,
+  maxDay
+) {
   const lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
@@ -342,6 +469,13 @@ function readSalesData_(sheet, year, month) {
     ) {
       return;
     }
+
+    if (
+  maxDay &&
+  dateInfo.day > Number(maxDay)
+) {
+  return;
+}
 
     rows.push({
       dateKey: dateInfo.dateKey,
@@ -534,4 +668,29 @@ function calculateAverageStoreSales_(stores) {
   }, 0);
 
   return Math.round(sum / activeStores.length);
+}
+function buildDashboardCacheKey_(
+  storeKey,
+  year,
+  month
+) {
+  return [
+    "dashboard",
+    storeKey,
+    year,
+    String(month).padStart(2, "0")
+  ].join("_");
+}
+function getLastSalesDay_(rows) {
+  if (!rows || !rows.length) {
+    return 0;
+  }
+
+  return rows.reduce(function(maxDay, row) {
+    const day = Number(
+      String(row.dateKey || "").split("-")[2]
+    );
+
+    return day > maxDay ? day : maxDay;
+  }, 0);
 }

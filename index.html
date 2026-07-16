@@ -31,11 +31,11 @@
       </div>
 
       <button
-        type="button"
-        class="refresh-button"
-        onclick="loadDashboard()">
-        새로고침
-      </button>
+  type="button"
+  class="refresh-button"
+  onclick="forceRefreshDashboard()">
+  최신 데이터 새로고침
+</button>
 
     </header>
 
@@ -112,6 +112,37 @@
           <strong id="averageSales">0원</strong>
         </article>
 
+        <article class="summary-card">
+  <span class="summary-label">
+    전년도 동기간 매출
+  </span>
+
+  <strong id="previousYearSales">
+    0원
+  </strong>
+
+  <small
+    id="comparisonPeriod"
+    class="summary-note">
+  </small>
+</article>
+
+
+<article class="summary-card">
+  <span class="summary-label">
+    전년 대비
+  </span>
+
+  <strong id="yearOnYearRate">
+    0.0%
+  </strong>
+
+  <small
+    id="yearOnYearDifference"
+    class="summary-note">
+    0원
+  </small>
+</article>
       </section>
 
 

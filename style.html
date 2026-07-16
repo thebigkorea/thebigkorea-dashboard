@@ -428,4 +428,30 @@
       padding: 20px 15px;
     }
   }
+  .summary-note {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.change-up {
+  color: #16794b !important;
+}
+
+.change-down {
+  color: #c2392f !important;
+}
+
+.change-flat {
+  color: #6b7280 !important;
+}
+
+@media (min-width: 1051px) {
+  .summary-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
 </style>

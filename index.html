@@ -12,6 +12,10 @@
   <title>더큰코리아 경영대시보드</title>
 
   <?!= include("style"); ?>
+
+  <script
+  src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js">
+  </script>
 </head>
 
 <body>
@@ -143,6 +147,43 @@
     0원
   </small>
 </article>
+      </section>
+
+            <section
+        id="salesChartSection"
+        class="content-card">
+
+        <div class="section-heading">
+
+          <div>
+            <span class="section-kicker">
+              CUMULATIVE SALES
+            </span>
+
+            <h2 id="salesChartTitle">
+              누적 매출 비교
+            </h2>
+          </div>
+
+          <div class="chart-legend-note">
+            당해 연도 · 전년도 동기간
+          </div>
+
+        </div>
+
+        <div class="chart-container">
+
+          <canvas id="cumulativeSalesChart">
+          </canvas>
+
+          <div
+            id="chartEmptyMessage"
+            class="empty-message hidden">
+            표시할 매출 자료가 없습니다.
+          </div>
+
+        </div>
+
       </section>
 
 

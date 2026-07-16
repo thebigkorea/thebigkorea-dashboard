@@ -1,5 +1,6 @@
 <script>
   let initialData = null;
+  let cumulativeSalesChart = null;
 
 
   document.addEventListener(
@@ -146,15 +147,20 @@ function forceRefreshDashboard() {
 
 
   function renderDashboard(data) {
-    renderSummary(data.summary);
+  renderSummary(data.summary);
 
-    if (data.mode === "all") {
-      renderAllStores(data);
-      return;
-    }
+  renderCumulativeSalesChart(
+    data.chartData || [],
+    data
+  );
 
-    renderSingleStore(data);
+  if (data.mode === "all") {
+    renderAllStores(data);
+    return;
   }
+
+  renderSingleStore(data);
+}
 
 
   function renderSummary(summary) {
@@ -197,6 +203,35 @@ function forceRefreshDashboard() {
   const difference =
     Number(summary.yearOnYearDifference || 0);
 
+  const previousYearSales =
+  Number(summary.previousYearSales || 0);  
+
+  if (previousYearSales <= 0) {
+  if (rateElement) {
+    rateElement.textContent = "비교 불가";
+
+    rateElement.classList.remove(
+      "change-up",
+      "change-down",
+      "change-flat"
+    );
+
+    rateElement.classList.add("change-flat");
+  }
+
+  if (differenceElement) {
+    differenceElement.textContent =
+      "전년도 자료 없음";
+
+    differenceElement.classList.remove(
+      "change-up",
+      "change-down",
+      "change-flat"
+    );
+
+    differenceElement.classList.add("change-flat");
+  }
+} else {
   if (rateElement) {
     rateElement.textContent =
       formatChangeRate(rate);
@@ -226,16 +261,220 @@ function forceRefreshDashboard() {
       getChangeClass(difference)
     );
   }
+}
 
   const endDay =
     Number(summary.comparisonEndDay || 0);
 
   setText(
-    "comparisonPeriod",
-    endDay > 0
-      ? "1일~" + endDay + "일 기준"
-      : "비교 자료 없음"
+  "comparisonPeriod",
+  previousYearSales > 0 && endDay > 0
+    ? "1일~" + endDay + "일 기준"
+    : "비교 자료 없음"
+);
+}
+
+function renderCumulativeSalesChart(
+  chartRows,
+  data
+) {
+  const canvas = document.getElementById(
+    "cumulativeSalesChart"
   );
+
+  const emptyMessage =
+    document.getElementById(
+      "chartEmptyMessage"
+    );
+
+  const title = document.getElementById(
+    "salesChartTitle"
+  );
+
+  if (!canvas) return;
+
+  if (title) {
+    title.textContent =
+      (data.storeName || "전체 지점") +
+      " · " +
+      data.year +
+      "년 " +
+      data.month +
+      "월 누적 매출";
+  }
+
+  if (cumulativeSalesChart) {
+    cumulativeSalesChart.destroy();
+    cumulativeSalesChart = null;
+  }
+
+  const rows = Array.isArray(chartRows)
+    ? chartRows
+    : [];
+
+  if (!rows.length) {
+    canvas.classList.add("hidden");
+
+    if (emptyMessage) {
+      emptyMessage.classList.remove("hidden");
+    }
+
+    return;
+  }
+
+  canvas.classList.remove("hidden");
+
+  if (emptyMessage) {
+    emptyMessage.classList.add("hidden");
+  }
+
+  const labels = rows.map(function(row) {
+    return row.label;
+  });
+
+  const currentSales = rows.map(function(row) {
+    return Number(row.currentSales || 0);
+  });
+
+  const previousSales = rows.map(function(row) {
+    return Number(row.previousSales || 0);
+  });
+
+  cumulativeSalesChart = new Chart(
+    canvas,
+    {
+      type: "line",
+
+      data: {
+        labels: labels,
+
+        datasets: [
+          {
+            label: data.year + "년 누적 매출",
+            data: currentSales,
+            borderColor: "#1f4d8f",
+            backgroundColor:
+              "rgba(31, 77, 143, 0.10)",
+            borderWidth: 3,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            tension: 0.28,
+            fill: true
+          },
+
+          {
+            label:
+              (Number(data.year) - 1) +
+              "년 동기간 누적 매출",
+
+            data: previousSales,
+            borderColor: "#c99a42",
+            backgroundColor:
+              "rgba(201, 154, 66, 0.05)",
+            borderWidth: 2,
+            borderDash: [7, 5],
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            tension: 0.28,
+            fill: false
+          }
+        ]
+      },
+
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+
+        plugins: {
+          legend: {
+            position: "top",
+            align: "end",
+
+            labels: {
+              usePointStyle: true,
+              boxWidth: 9,
+              padding: 18,
+              font: {
+                family:
+                  "'Noto Sans KR', sans-serif",
+                size: 12,
+                weight: "700"
+              }
+            }
+          },
+
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return (
+                  context.dataset.label +
+                  ": " +
+                  formatMoney(context.raw)
+                );
+              }
+            }
+          }
+        },
+
+        scales: {
+          x: {
+            grid: {
+              display: false
+            },
+
+            ticks: {
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 16
+            }
+          },
+
+          y: {
+            beginAtZero: true,
+
+            grid: {
+              color: "rgba(107, 114, 128, 0.12)"
+            },
+
+            ticks: {
+              callback: function(value) {
+                return formatCompactMoney(value);
+              }
+            }
+          }
+        }
+      }
+    }
+  );
+}
+
+
+function formatCompactMoney(value) {
+  const number = Number(value || 0);
+  const absolute = Math.abs(number);
+
+  if (absolute >= 100000000) {
+    return (
+      (number / 100000000).toFixed(1) +
+      "억"
+    );
+  }
+
+  if (absolute >= 10000) {
+    return (
+      Math.round(number / 10000) +
+      "만"
+    );
+  }
+
+  return new Intl.NumberFormat(
+    "ko-KR"
+  ).format(number);
 }
 
 
@@ -297,21 +536,58 @@ function forceRefreshDashboard() {
               </strong>
             </div>
 
-            <div class="store-metric">
-               <span>전년도 동기간</span>
+            <div class="store-comparison">
 
-            <strong>
-              ${formatMoney(store.previousYearSales)}
-            </strong>
-           </div>
+  <div class="store-metric">
+    <span>전년도 동기간</span>
 
-           <div class="store-metric">
-             <span>전년 대비</span>
+    <strong>
+      ${
+        store.previousYearSales > 0
+          ? formatMoney(store.previousYearSales)
+          : "비교 불가"
+      }
+    </strong>
+  </div>
 
-             <strong class="${getChangeClass(store.yearOnYearRate)}">
-               ${formatChangeRate(store.yearOnYearRate)}
-             </strong>
-          </div>
+  <div class="store-metric">
+    <span>전년 대비</span>
+
+    <div class="store-change-value">
+
+      <strong class="${
+        store.previousYearSales > 0
+          ? getChangeClass(store.yearOnYearRate)
+          : "change-flat"
+      }">
+        ${
+          store.previousYearSales > 0
+            ? formatChangeRate(store.yearOnYearRate)
+            : "비교 불가"
+        }
+      </strong>
+
+      <small class="${
+        store.previousYearSales > 0
+          ? getChangeClass(
+              store.yearOnYearDifference
+            )
+          : "change-flat"
+      }">
+        ${
+          store.previousYearSales > 0
+            ? formatChangeMoney(
+                store.yearOnYearDifference
+              )
+            : "전년도 자료 없음"
+        }
+      </small>
+
+    </div>
+
+  </div>
+
+</div>
 
             <button
               type="button"

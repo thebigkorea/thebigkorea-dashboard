@@ -121,6 +121,7 @@ function getAllStoreDashboard_(
   let totalSales = 0;
   let totalPurchases = 0;
   let totalPreviousYearSales = 0;
+  const combinedDailyMap = {};
 
   Object.keys(STORE_CONFIG).forEach(function(storeKey) {
     const store = STORE_CONFIG[storeKey];
@@ -163,6 +164,28 @@ function getAllStoreDashboard_(
           result.summary.comparisonEndDay || 0,
 
         error: ""
+      });
+
+            (result.daily || []).forEach(function(item) {
+        const day = Number(
+          String(item.dateKey || "").split("-")[2]
+        );
+
+        if (!day) return;
+
+        if (!combinedDailyMap[day]) {
+          combinedDailyMap[day] = {
+            day: day,
+            sales: 0,
+            previousSales: 0
+          };
+        }
+
+        combinedDailyMap[day].sales +=
+          Number(item.sales || 0);
+
+        combinedDailyMap[day].previousSales +=
+          Number(item.previousSales || 0);
       });
 
     } catch (error) {
@@ -224,9 +247,13 @@ function getAllStoreDashboard_(
       }, 0)
     },
 
-    stores: storeList,
+        stores: storeList,
     daily: [],
-    vendors: []
+    vendors: [],
+
+    chartData: buildCombinedCumulativeSalesData_(
+      combinedDailyMap
+    )
   };
 }
 
@@ -333,6 +360,12 @@ const previousSales = readSalesData_(
     dailyMap[key].purchases += item.amount;
   });
 
+  const previousMap = {};
+
+previousSales.rows.forEach(function(item) {
+  previousMap[item.dateKey.slice(5)] = item.amount;
+});
+
   const daily = Object.keys(dailyMap)
     .sort()
     .map(function(key) {
@@ -345,7 +378,19 @@ const previousSales = readSalesData_(
           )
         : 0;
 
-      return item;
+      const monthDay = item.dateKey.slice(5);
+
+return {
+  dateKey: item.dateKey,
+  dateLabel: item.dateLabel,
+
+  sales: item.sales,
+  purchases: item.purchases,
+  costRate: item.costRate,
+
+  previousSales:
+    previousMap[monthDay] || 0
+};
     });
 
   const todayKey = Utilities.formatDate(
@@ -406,9 +451,13 @@ const previousSales = readSalesData_(
         : 0
     },
 
-    daily: daily,
+        daily: daily,
     vendors: purchases.vendors,
-    stores: []
+    stores: [],
+
+    chartData: buildCumulativeSalesData_(
+      daily
+    )
   };
 
   try {
@@ -693,4 +742,76 @@ function getLastSalesDay_(rows) {
 
     return day > maxDay ? day : maxDay;
   }, 0);
+}
+function buildCumulativeSalesData_(dailyRows) {
+  const rows = Array.isArray(dailyRows)
+    ? dailyRows.slice()
+    : [];
+
+  rows.sort(function(a, b) {
+    return String(a.dateKey || "")
+      .localeCompare(String(b.dateKey || ""));
+  });
+
+  let currentCumulative = 0;
+  let previousCumulative = 0;
+
+  return rows.map(function(row) {
+    currentCumulative += Number(row.sales || 0);
+
+    previousCumulative += Number(
+      row.previousSales || 0
+    );
+
+    const day = Number(
+      String(row.dateKey || "").split("-")[2]
+    );
+
+    return {
+      day: day,
+      label: day + "일",
+      currentSales: currentCumulative,
+      previousSales: previousCumulative
+    };
+  });
+}
+
+
+function buildCombinedCumulativeSalesData_(
+  combinedDailyMap
+) {
+  const days = Object.keys(
+    combinedDailyMap || {}
+  )
+    .map(function(day) {
+      return Number(day);
+    })
+    .filter(function(day) {
+      return day > 0;
+    })
+    .sort(function(a, b) {
+      return a - b;
+    });
+
+  let currentCumulative = 0;
+  let previousCumulative = 0;
+
+  return days.map(function(day) {
+    const item = combinedDailyMap[day] || {};
+
+    currentCumulative += Number(
+      item.sales || 0
+    );
+
+    previousCumulative += Number(
+      item.previousSales || 0
+    );
+
+    return {
+      day: day,
+      label: day + "일",
+      currentSales: currentCumulative,
+      previousSales: previousCumulative
+    };
+  });
 }
